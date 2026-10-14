@@ -19,6 +19,7 @@ public partial class SentryStructuredLoggerTests
         _fixture.Hub.CaptureEnvelope(Arg.Do<Envelope>(arg => envelope = arg));
 
         logger.Log(level, "Template string with arguments: {0}, {1}, {2}, {3}", "string", true, 1, 2.2);
+        _fixture.AssertPrinted(level, "Template string with arguments: string, True, 1, 2.2");
         logger.Flush();
 
         _fixture.Hub.Received(1).CaptureEnvelope(Arg.Any<Envelope>());
@@ -40,6 +41,7 @@ public partial class SentryStructuredLoggerTests
         _fixture.Hub.CaptureEnvelope(Arg.Do<Envelope>(arg => envelope = arg));
 
         logger.Log(level, ConfigureLog, "Template string with arguments: {0}, {1}, {2}, {3}", "string", true, 1, 2.2);
+        _fixture.AssertPrinted(level, "Template string with arguments: string, True, 1, 2.2");
         logger.Flush();
 
         _fixture.Hub.Received(1).CaptureEnvelope(Arg.Any<Envelope>());
@@ -61,6 +63,7 @@ public partial class SentryStructuredLoggerTests
         _fixture.Hub.CaptureEnvelope(Arg.Do<Envelope>(arg => envelope = arg));
 
         logger.Log(level, "Message Text");
+        _fixture.AssertPrinted(level, "Message Text");
         logger.Flush();
 
         _fixture.Hub.Received(1).CaptureEnvelope(Arg.Any<Envelope>());
@@ -90,6 +93,7 @@ public partial class SentryStructuredLoggerTests
         _fixture.Hub.CaptureEnvelope(Arg.Do<Envelope>(arg => envelope = arg));
 
         logger.Log(level, "Template string with arguments: {0}, {1}, {2}, {3}", []);
+        _fixture.AssertPrinted(level, "Template string with arguments: {0}, {1}, {2}, {3}");
         logger.Flush();
 
         _fixture.Hub.Received(1).CaptureEnvelope(Arg.Any<Envelope>());

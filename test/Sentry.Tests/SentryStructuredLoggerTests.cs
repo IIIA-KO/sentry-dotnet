@@ -107,6 +107,7 @@ public partial class SentryStructuredLoggerTests : IDisposable
         _fixture.Hub.CaptureEnvelope(Arg.Do<Envelope>(arg => envelope = arg));
 
         logger.LogTrace(ConfigureLog, "Template string with arguments: {0}, {1}, {2}, {3}", "string", true, 1, 2.2);
+        _fixture.AssertPrinted(SentryLogLevel.Trace, "Template string with arguments: string, True, 1, 2.2");
         logger.Flush();
 
         _fixture.Hub.Received(1).CaptureEnvelope(Arg.Any<Envelope>());
@@ -128,6 +129,7 @@ public partial class SentryStructuredLoggerTests : IDisposable
         var logger = _fixture.GetSut();
 
         logger.LogTrace(ConfigureLog, "Template string with arguments: {0}, {1}, {2}, {3}", "string", true, 1, 2.2);
+        _fixture.AssertPrinted(SentryLogLevel.Trace, "Template string with arguments: string, True, 1, 2.2");
         logger.Flush();
 
         _fixture.Hub.Received(1).CaptureEnvelope(Arg.Any<Envelope>());
@@ -209,6 +211,43 @@ public partial class SentryStructuredLoggerTests : IDisposable
     }
 
     [Fact]
+    public void Log_DebugDisabled_DoesNotPrint()
+    {
+        _fixture.Options.Debug = false;
+        var logger = _fixture.GetSut();
+
+        logger.LogInfo("A message");
+        logger.Flush();
+
+        _fixture.Hub.Received(1).CaptureEnvelope(Arg.Any<Envelope>());
+        _fixture.DiagnosticLogger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Log_WithBeforeSendLog_PrintsConfiguredLog()
+    {
+        _fixture.Options.SetBeforeSendLog(static (SentryLog log) => new SentryLog(log.Timestamp, log.TraceId, log.Level, "Scrubbed message"));
+        var logger = _fixture.GetSut();
+
+        logger.LogWarning("A message with a secret");
+
+        _fixture.AssertPrinted(SentryLogLevel.Warning, "Scrubbed message");
+    }
+
+    [Fact]
+    public void CaptureLog_FromIntegration_DoesNotPrint()
+    {
+        var logger = _fixture.GetSut();
+        var log = new SentryLog(_fixture.Clock.GetUtcNow(), _fixture.TraceId, SentryLogLevel.Info, "A message");
+
+        logger.CaptureLog(log);
+        logger.Flush();
+
+        _fixture.Hub.Received(1).CaptureEnvelope(Arg.Any<Envelope>());
+        _fixture.DiagnosticLogger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Flush_AfterLog_CapturesEnvelope()
     {
         var logger = _fixture.GetSut();
@@ -221,6 +260,7 @@ public partial class SentryStructuredLoggerTests : IDisposable
         envelope.Should().BeNull();
 
         logger.LogTrace(ConfigureLog, "Template string with arguments: {0}, {1}, {2}, {3}", "string", true, 1, 2.2);
+        _fixture.AssertPrinted(SentryLogLevel.Trace, "Template string with arguments: string, True, 1, 2.2");
         _fixture.Hub.Received(0).CaptureEnvelope(Arg.Any<Envelope>());
         envelope.Should().BeNull();
 
@@ -244,6 +284,7 @@ public partial class SentryStructuredLoggerTests : IDisposable
         entry.Message.Should().Be("{0}-Buffer full ... dropping {0}");
         entry.Exception.Should().BeNull();
         entry.Args.Should().BeEquivalentTo([nameof(SentryLog)]);
+        _fixture.AssertPrinted(SentryLogLevel.Trace, "Template string with arguments: string, True, 1, 2.2");
     }
 
     [Fact]
@@ -262,6 +303,7 @@ public partial class SentryStructuredLoggerTests : IDisposable
         var logger = _fixture.GetSut();
 
         logger.LogInfo("A message");
+        _fixture.AssertPrinted(SentryLogLevel.Info, "A message");
         logger.Flush();
 
         capturedLog.Should().NotBeNull();
@@ -285,6 +327,7 @@ public partial class SentryStructuredLoggerTests : IDisposable
         var logger = _fixture.GetSut();
 
         logger.LogInfo("A message");
+        _fixture.AssertPrinted(SentryLogLevel.Info, "A message");
         logger.Flush();
 
         capturedLog.Should().NotBeNull();
@@ -301,6 +344,26 @@ public partial class SentryStructuredLoggerTests : IDisposable
 
 internal static class LoggerAssertionExtensions
 {
+    public static void AssertPrinted(this SentryStructuredLoggerTests.Fixture fixture, SentryLogLevel level, string message)
+    {
+        var (expectedLevel, expectedSeverityText) = level switch
+        {
+            SentryLogLevel.Trace => (SentryLevel.Debug, "trace"),
+            SentryLogLevel.Debug => (SentryLevel.Debug, "debug"),
+            SentryLogLevel.Info => (SentryLevel.Info, "info"),
+            SentryLogLevel.Warning => (SentryLevel.Warning, "warn"),
+            SentryLogLevel.Error => (SentryLevel.Error, "error"),
+            SentryLogLevel.Fatal => (SentryLevel.Fatal, "fatal"),
+            _ => throw new ArgumentOutOfRangeException(nameof(level), level, null),
+        };
+
+        var entry = fixture.DiagnosticLogger.Dequeue();
+        entry.Level.Should().Be(expectedLevel);
+        entry.Message.Should().Be("Log [{0}]: {1}");
+        entry.Exception.Should().BeNull();
+        entry.Args.Should().BeEquivalentTo(new object[] { expectedSeverityText, message }, options => options.WithStrictOrdering());
+    }
+
     public static void AssertEnvelope(this SentryStructuredLoggerTests.Fixture fixture, Envelope envelope, SentryLogLevel level)
     {
         envelope.Header.Should().ContainSingle().Which.Key.Should().Be("sdk");

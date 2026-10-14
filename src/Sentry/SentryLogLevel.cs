@@ -102,6 +102,18 @@ internal static class SentryLogLevelExtensions
         }
     }
 
+    internal static SentryLevel ToSentryLevel(this SentryLogLevel level)
+    {
+        return (int)level switch
+        {
+            <= 8 => SentryLevel.Debug,
+            <= 12 => SentryLevel.Info,
+            <= 16 => SentryLevel.Warning,
+            <= 20 => SentryLevel.Error,
+            _ => SentryLevel.Fatal,
+        };
+    }
+
     internal static SentryLogLevel FromValue(int value, IDiagnosticLogger? logger)
     {
         return value switch

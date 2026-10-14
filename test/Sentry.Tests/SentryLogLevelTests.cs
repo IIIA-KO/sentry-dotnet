@@ -149,4 +149,21 @@ public class SentryLogLevelTests
             { 24, SentryLogLevel.Fatal },
         };
     }
+
+    [Theory]
+    [InlineData(SentryLogLevel.Trace, SentryLevel.Debug)]
+    [InlineData(SentryLogLevel.Debug, SentryLevel.Debug)]
+    [InlineData(SentryLogLevel.Info, SentryLevel.Info)]
+    [InlineData(SentryLogLevel.Warning, SentryLevel.Warning)]
+    [InlineData(SentryLogLevel.Error, SentryLevel.Error)]
+    [InlineData(SentryLogLevel.Fatal, SentryLevel.Fatal)]
+    [InlineData((SentryLogLevel)0, SentryLevel.Debug)]
+    [InlineData((SentryLogLevel)12, SentryLevel.Info)]
+    [InlineData((SentryLogLevel)25, SentryLevel.Fatal)]
+    public void ToSentryLevel_MapsSeverityRange(SentryLogLevel level, SentryLevel expected)
+    {
+        var actual = level.ToSentryLevel();
+
+        Assert.Equal(expected, actual);
+    }
 }

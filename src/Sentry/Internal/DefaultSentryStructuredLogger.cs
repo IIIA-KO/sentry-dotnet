@@ -79,12 +79,21 @@ internal sealed class DefaultSentryStructuredLogger : SentryStructuredLogger, ID
         var scope = _hub.GetScope();
         log.SetDefaultAttributes(_options, scope);
 
-        CaptureLog(log);
+        if (TryCaptureLog(log, out var capturedLog))
+        {
+            PrintIfDebug(capturedLog);
+        }
     }
 
     /// <inheritdoc />
     protected internal override void CaptureLog(SentryLog log)
     {
+        _ = TryCaptureLog(log, out _);
+    }
+
+    private bool TryCaptureLog(SentryLog log, [NotNullWhen(true)] out SentryLog? capturedLog)
+    {
+        capturedLog = null;
         var configuredLog = log;
 
         if (_options.BeforeSendLogInternal is { } beforeSendLog)
@@ -97,7 +106,7 @@ internal sealed class DefaultSentryStructuredLogger : SentryStructuredLogger, ID
             {
                 _options.ClientReportRecorder.RecordDiscardedEvent(DiscardReason.CallbackError, DataCategory.LogItem);
                 _options.DiagnosticLogger?.LogError(e, "The BeforeSendLog callback threw an exception. The Log will be dropped.");
-                return;
+                return false;
             }
         }
 
@@ -105,10 +114,29 @@ internal sealed class DefaultSentryStructuredLogger : SentryStructuredLogger, ID
         {
             _options.ClientReportRecorder.RecordDiscardedEvent(DiscardReason.BeforeSend, DataCategory.LogItem);
             _options.DiagnosticLogger?.LogInfo("Log dropped by BeforeSendLog callback.");
-            return;
+            return false;
         }
 
         _batchProcessor.Enqueue(configuredLog);
+        capturedLog = configuredLog;
+        return true;
+    }
+
+    // When Debug is enabled, calls to the logger API should also print the log.
+    // See https://develop.sentry.dev/sdk/telemetry/logs/
+    private void PrintIfDebug(SentryLog log)
+    {
+        if (_options.DiagnosticLogger is not { } logger)
+        {
+            return;
+        }
+
+        var level = log.Level.ToSentryLevel();
+        if (logger.IsEnabled(level))
+        {
+            var (severityText, _) = log.Level.ToSeverityTextAndOptionalSeverityNumber(null);
+            logger.Log(level, "Log [{0}]: {1}", null, severityText, log.Message);
+        }
     }
 
     /// <inheritdoc />
